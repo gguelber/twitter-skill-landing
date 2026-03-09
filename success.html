@@ -36,6 +36,7 @@
     </style>
 </head>
 <body>
+    <div id="notification-container"></div>
     <div class="glow-overlay"></div>
     
     <div class="container success-container">
@@ -66,6 +67,20 @@
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        // Custom Notification Logic
+        const showNotification = (message, type = 'info') => {
+            const container = document.getElementById('notification-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${type === 'error' ? '❌' : (type === 'success' ? '✅' : 'ℹ️')}</span> ${message}`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+
         const connectBtn = document.getElementById('connect-btn');
         const verifyBtn = document.getElementById('verify-btn');
         const downloadSection = document.getElementById('download-section');
@@ -73,22 +88,24 @@
         let walletAddress = null;
 
         connectBtn.onclick = async () => {
-            if (!window.solana) return alert("Phantom Wallet not found!");
+            if (!window.solana) return showNotification("Phantom Wallet not found!", "error");
             const resp = await window.solana.connect();
             walletAddress = resp.publicKey.toString();
             console.log("Connected:", walletAddress);
+            showNotification("Wallet Connected!", "success");
             connectBtn.style.display = 'none';
             verifyBtn.style.display = 'inline-block';
         };
 
         verifyBtn.onclick = async () => {
             try {
+                showNotification("Aguardando assinatura...", "info");
                 // 1. SECURE PROOF OF OWNERSHIP (SIGN MESSAGE)
                 const message = `Authorize Gaia Skill Access\nWallet: ${walletAddress}\nTimestamp: ${Date.now()}`;
                 const encodedMessage = new TextEncoder().encode(message);
                 const signedMessage = await window.solana.signMessage(encodedMessage, "utf8");
                 
-                console.log("Proof of ownership signed.");
+                showNotification("Assinatura confirmada! Verificando cofre...", "success");
 
                 // 2. VERIFY AGAINST SUPABASE
                 const { data, error } = await supabaseClient
@@ -115,18 +132,14 @@
                     downloadSection.appendChild(card);
                     downloadSection.style.display = 'block';
                     
-                    // Add secondary instructions below
-                    const meta = document.createElement('div');
-                    meta.className = "instructions card";
-                    meta.innerHTML = "<h3>One-Minute Install:</h3><code>mkdir -p ~/.openclaw/workspace/skills/twitter-manager</code><br><code># Unzip package into that folder</code><br><code>npm install && node setup.js</code>";
-                    downloadSection.appendChild(meta);
+                    showNotification("Acesso Liberado!", "success");
 
                 } else {
-                    alert("Verification Failed: No purchase found for this wallet in our database.");
+                    showNotification("Nenhuma compra encontrada para esta carteira.", "error");
                 }
             } catch (err) {
                 console.error(err);
-                alert("Auth Failed: " + (err.message || "Unknown error"));
+                showNotification("Erro na autenticação: " + (err.message || "Tente novamente"), "error");
             }
         };
     </script>

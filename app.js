@@ -5,6 +5,20 @@ const SUPABASE_ANON_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Custom Notification Logic
+const showNotification = (message, type = 'info') => {
+    const container = document.getElementById('notification-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${type === 'error' ? '❌' : (type === 'success' ? '✅' : 'ℹ️')}</span> ${message}`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+};
+
 const TREASURY_WALLET = "AgV3qYqXQPr2fD8K2hM4Rpx4v5R3L2A5Yf7N7V7W7x7";
 const PRICE_SOL = 0.5;
 
@@ -19,7 +33,8 @@ const getProvider = () => {
         const provider = window.solana;
         if (provider.isPhantom) return provider;
     }
-    window.open('https://phantom.app/', '_blank');
+    showNotification("Phantom Wallet not found! Redirecting...", "error");
+    setTimeout(() => window.open('https://phantom.app/', '_blank'), 2000);
 };
 
 // Update Connect Button
@@ -83,7 +98,8 @@ const handlePurchase = async () => {
     }
 
     if (!blockhash) {
-        alert("Solana Public RPCs are currently congested (403/401). \n\nPRO TIP: For a $10k product, we recommend getting a FREE dedicated API key from helius.dev or quicknode.com to ensure 100% uptime!");
+        showNotification("Solana nodes are congested. Retrying...", "info");
+        showNotification("Tip: Use a dedicated RPC for 100% uptime.", "info");
         return;
     }
 
@@ -102,6 +118,7 @@ const handlePurchase = async () => {
         const { signature } = await provider.signAndSendTransaction(transaction);
 
         console.log("Transaction Sent:", signature);
+        showNotification("Transaction sent! Recording sale...", "success");
 
         // Record sale in Supabase
         const { error } = await supabaseClient
@@ -118,9 +135,9 @@ const handlePurchase = async () => {
     } catch (err) {
         console.error("Transaction failed", err);
         if (err.message.includes('403')) {
-            alert("Security Block (403): The Solana network is blocking this request. Please try again in 10 seconds.");
+            showNotification("Network congestion. Please try again in 10s.", "error");
         } else {
-            alert("Transaction error: " + (err.message || "Please check your Phantom wallet balance."));
+            showNotification("Transaction error: " + (err.message || "Check wallet balance"), "error");
         }
     }
 };
