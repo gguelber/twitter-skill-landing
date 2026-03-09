@@ -42,12 +42,12 @@ connectBtn.addEventListener('click', async () => {
     }
 });
 
-// Resilient RPC Pool
+// Resilient RPC Pool (Public Endpoints)
 const RPC_ENDPOINTS = [
+    'https://api.mainnet-beta.solana.com',
+    'https://solana-api.projectserum.com',
     'https://rpc.ankr.com/solana',
-    'https://solana-mainnet.rpc.extrnode.com',
-    'https://mainnet.helius-rpc.com/?api-key=dc96726b-76bb-4933-9fc8-cc02dc7460f1', // Public proxy
-    'https://api.mainnet-beta.solana.com'
+    'https://mainnet.helius-rpc.com/?api-key=dc96726b-76bb-4933-9fc8-cc02dc7460f1' // Backup (Rate-limited public key)
 ];
 
 // Implementation of the purchase
@@ -59,26 +59,31 @@ const handlePurchase = async () => {
         return;
     }
 
-    let currentRpcIndex = 0;
     let blockhash = null;
     let successfulConnection = null;
 
-    // Retry Loop for Blockhash (The 403 hotspot)
-    while (currentRpcIndex < RPC_ENDPOINTS.length && !blockhash) {
+    // Aggressive Retry Loop
+    for (const url of RPC_ENDPOINTS) {
         try {
-            console.log(`Trying RPC: ${RPC_ENDPOINTS[currentRpcIndex]}`);
-            const connection = new solanaWeb3.Connection(RPC_ENDPOINTS[currentRpcIndex], 'confirmed');
-            const result = await connection.getLatestBlockhash();
+            console.log(`Trying RPC: ${url}`);
+            const connection = new solanaWeb3.Connection(url, {
+                commitment: 'confirmed',
+                confirmTransactionInitialTimeout: 60000
+            });
+            const result = await connection.getLatestBlockhash('confirmed');
             blockhash = result.blockhash;
             successfulConnection = connection;
+            if (blockhash) {
+                console.log("Blockhash secured via:", url);
+                break;
+            }
         } catch (err) {
-            console.warn(`RPC ${currentRpcIndex} failed:`, err.message);
-            currentRpcIndex++;
+            console.warn(`RPC failed (${url}):`, err.message);
         }
     }
 
     if (!blockhash) {
-        alert("Solana Network is extremely congested. All public nodes are rate-limiting right now. Please wait 1 minute and try again.");
+        alert("Solana Public RPCs are currently congested (403/401). \n\nPRO TIP: For a $10k product, we recommend getting a FREE dedicated API key from helius.dev or quicknode.com to ensure 100% uptime!");
         return;
     }
 
