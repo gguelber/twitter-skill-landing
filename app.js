@@ -67,66 +67,47 @@ connectBtn.addEventListener('click', async () => {
     }
 });
 
-// Resilient RPC Pool (Public & Community Endpoints)
-// Focused on stability for public dApps
-const RPC_ENDPOINTS = [
-    'https://solana-mainnet.g.allnodes.com',
-    'https://solana.public-rpc.com',
-    'https://api.mainnet.solana.com',
-    'https://api.mainnet-beta.solana.com'
-];
+// --- WEB3 CONFIGURATION ---
+// Even with the official SDK, Solana requires a "Connection" (RPC) to 
+// fetch a 'recent blockhash' - this is a security requirement of the 
+// blockchain itself, not a coding choice.
+const PRIMARY_RPC = 'https://api.mainnet-beta.solana.com';
+const FALLBACK_RPC = 'https://solana-mainnet.g.allnodes.com';
 
-// Implementation of the purchase
+// Unified Connection logic for Mobile & Desktop
 const handlePurchase = async () => {
-    console.log("Gaia Purchase Started...");
+    console.log("Gaia Mobile-Native Purchase Started...");
     const provider = getProvider();
+    if (!provider) return;
+
     if (!userWallet) {
-        showNotification("Please connect your wallet first!", "info");
-        connectBtn.click();
-        return;
+        showNotification("Connecting Wallet...", "info");
+        await provider.connect();
     }
 
-    showNotification("Contacting Solana Network...", "info");
+    showNotification("Preparing Transaction...", "info");
 
     let blockhash = null;
-    let successfulConnection = null;
+    let connection = new solanaWeb3.Connection(PRIMARY_RPC, 'confirmed');
 
-    // Aggressive but graceful Retry Loop
-    for (const url of RPC_ENDPOINTS) {
-        try {
-            console.log(`Trying RPC: ${url}`);
-            const connection = new solanaWeb3.Connection(url, {
-                commitment: 'confirmed',
-                confirmTransactionInitialTimeout: 20000
-            });
-
-            // We use a Promise with a timeout to prevent hanging
-            const result = await Promise.race([
-                connection.getLatestBlockhash('confirmed'),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
-            ]);
-
-            blockhash = result.blockhash;
-            successfulConnection = connection;
-            if (blockhash) {
-                console.log("Blockhash secured via:", url);
-                break;
-            }
-        } catch (err) {
-            console.warn(`RPC failed (${url}):`, err.message);
-            // Wait 500ms before next try to satisfy rate limiters
-            await new Promise(r => setTimeout(r, 500));
-        }
+    try {
+        // Step 1: Get latest blockhash (Solana MANDATORY step)
+        const result = await connection.getLatestBlockhash();
+        blockhash = result.blockhash;
+    } catch (err) {
+        console.warn("Primary RPC failed, switching to fallback...");
+        connection = new solanaWeb3.Connection(FALLBACK_RPC, 'confirmed');
+        const result = await connection.getLatestBlockhash();
+        blockhash = result.blockhash;
     }
 
     if (!blockhash) {
-        showNotification("All public nodes are congested. Wait 30s.", "error");
+        showNotification("Network busy. Please retry in 10s.", "error");
         return;
     }
 
     try {
-        showNotification("Transaction ready! Check your wallet...", "info");
-
+        // Step 2: Build Native Transaction
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: userWallet,
@@ -138,34 +119,26 @@ const handlePurchase = async () => {
         transaction.feePayer = userWallet;
         transaction.recentBlockhash = blockhash;
 
+        // Step 3: Send to Wallet for User Consent
+        showNotification("Confirm the transaction in your wallet!", "success");
         const { signature } = await provider.signAndSendTransaction(transaction);
 
-        console.log("Transaction Sent:", signature);
-        showNotification("Transaction sent! Recording sale...", "success");
+        console.log("Tx Signature:", signature);
+        showNotification("Payment Confirmed! Updating Database...", "success");
 
-        // Record sale in Supabase
         if (supabaseClient) {
-            const { error } = await supabaseClient
-                .from('sales')
-                .insert([
-                    { wallet_address: provider.publicKey.toString(), signature: signature, amount_sol: PRICE_SOL }
-                ]);
-
-            if (error) console.error("Error saving to DB:", error);
+            await supabaseClient.from('sales').insert([
+                { wallet_address: userWallet.toString(), signature: signature, amount_sol: PRICE_SOL }
+            ]);
         }
 
-        showNotification("Redirecting to dashboard...", "success");
-        setTimeout(() => window.location.replace(`success.html?sig=${signature}`), 2000);
+        setTimeout(() => {
+            window.location.href = `success.html?sig=${signature}`;
+        }, 1500);
 
     } catch (err) {
-        console.error("Transaction failed", err);
-        if (err.message.includes('403')) {
-            showNotification("Network congestion. Try again in 10s.", "error");
-        } else if (err.message.includes('User rejected')) {
-            showNotification("Transaction cancelled by user.", "info");
-        } else {
-            showNotification("Transaction error: " + (err.message || "Check wallet"), "error");
-        }
+        console.error("Purchase error:", err);
+        showNotification(err.message.includes('rejected') ? "Canceled by user." : "Tx Failed: Check balance", "error");
     }
 };
 
