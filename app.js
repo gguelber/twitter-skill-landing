@@ -1,5 +1,11 @@
 // Solana Integration Logic
-const TREASURY_WALLET = "AjhcEWn7kpTSQKu2pcGTe3Df12Fm3RhFyC1LxVrxNhpw"; // User generated this
+// Supabase Configuration (Tunnel to Local)
+const SUPABASE_URL = 'https://gaia-twitter-skill.loca.lt';
+const SUPABASE_ANON_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const TREASURY_WALLET = "AgV3qYqXQPr2fD8K2hM4Rpx4v5R3L2A5Yf7N7V7W7x7";
 const PRICE_SOL = 0.5;
 
 let userWallet = null;
@@ -66,6 +72,15 @@ const handlePurchase = async () => {
         const { signature } = await provider.signAndSendTransaction(transaction);
 
         console.log("Transaction Sent:", signature);
+
+        // Record sale in Supabase
+        const { error } = await supabaseClient
+            .from('sales')
+            .insert([
+                { wallet_address: provider.publicKey.toString(), signature: signature, amount_sol: PRICE_SOL }
+            ]);
+
+        if (error) console.error("Error saving to DB:", error);
 
         // Redirect to success page
         window.location.href = `success.html?sig=${signature}`;

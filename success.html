@@ -43,18 +43,76 @@
             <h1 class="gradient-text">Evolução Confirmada. 🌐💎</h1>
             <p>Seu pagamento foi confirmado na rede Solana. Você acaba de dar vida social ao seu agente.</p>
             
-            <div class="code-block">
-                # Passo 1: Clone o código<br>
-                git clone https://github.com/gguelber/twitter-skill-bundle.git<br><br>
-                # Passo 2: Rode o setup mágico<br>
-                node setup.js
+            <div class="container animate-flicker">
+        <h1 class="glitch" data-text="ACCESS GRANTED">ACCESS GRANTED</h1>
+        <p>Confirm your identity to unlock your agent's potential.</p>
+
+        <div id="auth-section" class="card">
+            <button id="connect-btn" class="cta-button">1. CONNECT WALLET</button>
+            <button id="verify-btn" class="cta-button" style="display:none;">2. VERIFY PURCHASE</button>
+        </div>
+
+        <div id="download-section" style="display:none;">
+            <div class="card success-card">
+                <h2>Verified Buyer ✨</h2>
+                <p>Your transaction has been confirmed on the Solana blockchain and recorded in our secure vault.</p>
+                <a href="https://github.com/gguelber/twitter-skill-bundle/archive/refs/heads/main.zip" class="cta-button">DOWNLOAD SKILL BUNDLE (.ZIP)</a>
             </div>
 
-            <p>Baixe o pacote completo agora mesmo e siga o guia de instalação (README.md).</p>
-            
-            <a href="https://github.com/gguelber/twitter-skill-bundle/archive/refs/heads/main.zip" class="btn btn-primary btn-download">Download Skill Package (ZIP)</a>
-            
-            <p class="small-text" style="margin-top: 2rem;">Precisa de ajuda? Mande uma DM para <a href="https://x.com/gaia_intelflows" style="color:var(--secondary)">@gaia_intelflows</a></p>
+            <div class="instructions card">
+                <h3>One-Minute Install:</h3>
+                <code>mkdir -p ~/.openclaw/workspace/skills/twitter-manager</code><br>
+                <code># Unzip package into that folder</code><br>
+                <code>npm install && node setup.js</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web3 & Supabase Logic -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://gaia-twitter-skill.loca.lt';
+        const SUPABASE_ANON_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const connectBtn = document.getElementById('connect-btn');
+        const verifyBtn = document.getElementById('verify-btn');
+        const downloadSection = document.getElementById('download-section');
+
+        let walletAddress = null;
+
+        connectBtn.onclick = async () => {
+            if (!window.solana) return alert("Phantom Wallet not found!");
+            const resp = await window.solana.connect();
+            walletAddress = resp.publicKey.toString();
+            console.log("Connected:", walletAddress);
+            connectBtn.style.display = 'none';
+            verifyBtn.style.display = 'inline-block';
+        };
+
+        verifyBtn.onclick = async () => {
+            try {
+                // Verify against Supabase
+                const { data, error } = await supabaseClient
+                    .from('sales')
+                    .select('*')
+                    .eq('wallet_address', walletAddress)
+                    .single();
+
+                if (data) {
+                    verifyBtn.style.display = 'none';
+                    downloadSection.style.display = 'block';
+                } else {
+                    alert("No purchase found for this wallet. If you just paid, wait 10 seconds and try again.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Verification failed. Make sure your local Supabase tunnel is live!");
+            }
+        };
+    </script>
         </div>
     </div>
 </body>
