@@ -42,6 +42,18 @@ connectBtn.addEventListener('click', async () => {
     }
 });
 
+// Resilient Connection Factory
+const getResilientConnection = () => {
+    const endpoints = [
+        'https://rpc.ankr.com/solana',
+        'https://solana-mainnet.core.chainstack.com/5df6e3df6a157508493da62214300e40', // Public trial
+        solanaWeb3.clusterApiUrl('mainnet-beta')
+    ];
+
+    // Try the first available endpoint
+    return new solanaWeb3.Connection(endpoints[0], 'confirmed');
+};
+
 // Implementation of the purchase
 const handlePurchase = async () => {
     const provider = getProvider();
@@ -52,10 +64,7 @@ const handlePurchase = async () => {
     }
 
     try {
-        const connection = new solanaWeb3.Connection(
-            solanaWeb3.clusterApiUrl('mainnet-beta'),
-            'confirmed'
-        );
+        const connection = getResilientConnection();
 
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
@@ -66,7 +75,19 @@ const handlePurchase = async () => {
         );
 
         transaction.feePayer = userWallet;
-        const { blockhash } = await connection.getLatestBlockhash();
+
+        // Manual blockhash fetch with retry
+        let blockhash;
+        try {
+            const result = await connection.getLatestBlockhash();
+            blockhash = result.blockhash;
+        } catch (rpcErr) {
+            console.warn("Primary RPC failed (403 or Timeout), trying fallback...", rpcErr);
+            const fallbackConn = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'), 'confirmed');
+            const result = await fallbackConn.getLatestBlockhash();
+            blockhash = result.blockhash;
+        }
+
         transaction.recentBlockhash = blockhash;
 
         const { signature } = await provider.signAndSendTransaction(transaction);
@@ -83,11 +104,15 @@ const handlePurchase = async () => {
         if (error) console.error("Error saving to DB:", error);
 
         // Redirect to success page
-        window.location.href = `success.html?sig=${signature}`;
+        window.location.replace(`success.html?sig=${signature}`);
 
     } catch (err) {
         console.error("Transaction failed", err);
-        alert("Transaction cancelled or failed. Please try again.");
+        if (err.message.includes('403')) {
+            alert("Solana Network is congested (RPC 403). Please refresh the page and try one more time.");
+        } else {
+            alert("Transaction error. Please check your Phantom wallet and try again.");
+        }
     }
 };
 
