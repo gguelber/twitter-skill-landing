@@ -67,12 +67,12 @@ connectBtn.addEventListener('click', async () => {
     }
 });
 
-// Resilient RPC Pool (Public Endpoints)
+// Resilient RPC Pool (Public & Community Endpoints)
 const RPC_ENDPOINTS = [
-    'https://api.mainnet-beta.solana.com',
-    'https://solana-api.projectserum.com',
-    'https://rpc.ankr.com/solana',
-    'https://mainnet.helius-rpc.com/?api-key=dc96726b-76bb-4933-9fc8-cc02dc7460f1' // Backup (Rate-limited public key)
+    'https://solana-mainnet.g.allnodes.com',
+    'https://solana.public-rpc.com',
+    'https://api.mainnet.solana.com',
+    'https://api.mainnet-beta.solana.com'
 ];
 
 // Implementation of the purchase
@@ -80,10 +80,12 @@ const handlePurchase = async () => {
     console.log("Gaia Purchase Started...");
     const provider = getProvider();
     if (!userWallet) {
-        alert("Please connect your wallet first!");
+        showNotification("Please connect your wallet first!", "info");
         connectBtn.click();
         return;
     }
+
+    showNotification("Contacting Solana Network...", "info");
 
     let blockhash = null;
     let successfulConnection = null;
@@ -94,8 +96,9 @@ const handlePurchase = async () => {
             console.log(`Trying RPC: ${url}`);
             const connection = new solanaWeb3.Connection(url, {
                 commitment: 'confirmed',
-                confirmTransactionInitialTimeout: 60000
+                confirmTransactionInitialTimeout: 30000
             });
+            // Test connection with getLatestBlockhash
             const result = await connection.getLatestBlockhash('confirmed');
             blockhash = result.blockhash;
             successfulConnection = connection;
@@ -109,12 +112,13 @@ const handlePurchase = async () => {
     }
 
     if (!blockhash) {
-        showNotification("Solana nodes are congested. Retrying...", "info");
-        showNotification("Tip: Use a dedicated RPC for 100% uptime.", "info");
+        showNotification("All public nodes are congested. Wait 30s.", "error");
         return;
     }
 
     try {
+        showNotification("Transaction ready! Check your wallet...", "info");
+
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: userWallet,
@@ -132,23 +136,27 @@ const handlePurchase = async () => {
         showNotification("Transaction sent! Recording sale...", "success");
 
         // Record sale in Supabase
-        const { error } = await supabaseClient
-            .from('sales')
-            .insert([
-                { wallet_address: provider.publicKey.toString(), signature: signature, amount_sol: PRICE_SOL }
-            ]);
+        if (supabaseClient) {
+            const { error } = await supabaseClient
+                .from('sales')
+                .insert([
+                    { wallet_address: provider.publicKey.toString(), signature: signature, amount_sol: PRICE_SOL }
+                ]);
 
-        if (error) console.error("Error saving to DB:", error);
+            if (error) console.error("Error saving to DB:", error);
+        }
 
-        // Redirect to success page
-        window.location.replace(`success.html?sig=${signature}`);
+        showNotification("Redirecting to dashboard...", "success");
+        setTimeout(() => window.location.replace(`success.html?sig=${signature}`), 2000);
 
     } catch (err) {
         console.error("Transaction failed", err);
         if (err.message.includes('403')) {
-            showNotification("Network congestion. Please try again in 10s.", "error");
+            showNotification("Network congestion. Try again in 10s.", "error");
+        } else if (err.message.includes('User rejected')) {
+            showNotification("Transaction cancelled by user.", "info");
         } else {
-            showNotification("Transaction error: " + (err.message || "Check wallet balance"), "error");
+            showNotification("Transaction error: " + (err.message || "Check wallet"), "error");
         }
     }
 };
