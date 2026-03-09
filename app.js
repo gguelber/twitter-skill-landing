@@ -67,11 +67,8 @@ const handlePurchase = async () => {
 
         console.log("Transaction Sent:", signature);
 
-        alert(`Transaction Sent! Signature: ${signature.slice(0, 10)}... \n\nRedirecting to claim your skill via DM.`);
-
-        // Redirect to a claim flow (e.g. tweet to the bot)
-        const tweetText = encodeURIComponent(`I just evolved my agent with the Gaia Twitter Skill! 🤖💎 Payment confirmed. sig: ${signature}`);
-        window.open(`https://twitter.com/intent/tweet?text=${tweetText}&related=gaia_intelflows`, '_blank');
+        // Redirect to success page
+        window.location.href = `success.html?sig=${signature}`;
 
     } catch (err) {
         console.error("Transaction failed", err);
