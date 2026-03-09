@@ -2,12 +2,22 @@
 // Supabase Configuration (Tunnel to Local)
 const SUPABASE_URL = 'https://gaia-twitter-skill.loca.lt';
 const SUPABASE_ANON_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
-const { createClient } = supabase;
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Graceful Supabase Init
+let supabaseClient = null;
+if (typeof supabase !== 'undefined') {
+    const { createClient } = supabase;
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log("Supabase initialized.");
+} else {
+    console.error("Supabase library not loaded. Check CDN or Network.");
+}
 
 // Custom Notification Logic
 const showNotification = (message, type = 'info') => {
+    console.log(`[Gaia Notify] ${type.toUpperCase()}: ${message}`);
     const container = document.getElementById('notification-container');
+    if (!container) return console.warn("Notification container missing from DOM.");
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `<span>${type === 'error' ? '❌' : (type === 'success' ? '✅' : 'ℹ️')}</span> ${message}`;
@@ -67,6 +77,7 @@ const RPC_ENDPOINTS = [
 
 // Implementation of the purchase
 const handlePurchase = async () => {
+    console.log("Gaia Purchase Started...");
     const provider = getProvider();
     if (!userWallet) {
         alert("Please connect your wallet first!");
