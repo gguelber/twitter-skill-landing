@@ -68,6 +68,7 @@ connectBtn.addEventListener('click', async () => {
 });
 
 // Resilient RPC Pool (Public & Community Endpoints)
+// Focused on stability for public dApps
 const RPC_ENDPOINTS = [
     'https://solana-mainnet.g.allnodes.com',
     'https://solana.public-rpc.com',
@@ -90,16 +91,21 @@ const handlePurchase = async () => {
     let blockhash = null;
     let successfulConnection = null;
 
-    // Aggressive Retry Loop
+    // Aggressive but graceful Retry Loop
     for (const url of RPC_ENDPOINTS) {
         try {
             console.log(`Trying RPC: ${url}`);
             const connection = new solanaWeb3.Connection(url, {
                 commitment: 'confirmed',
-                confirmTransactionInitialTimeout: 30000
+                confirmTransactionInitialTimeout: 20000
             });
-            // Test connection with getLatestBlockhash
-            const result = await connection.getLatestBlockhash('confirmed');
+
+            // We use a Promise with a timeout to prevent hanging
+            const result = await Promise.race([
+                connection.getLatestBlockhash('confirmed'),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
+            ]);
+
             blockhash = result.blockhash;
             successfulConnection = connection;
             if (blockhash) {
@@ -108,6 +114,8 @@ const handlePurchase = async () => {
             }
         } catch (err) {
             console.warn(`RPC failed (${url}):`, err.message);
+            // Wait 500ms before next try to satisfy rate limiters
+            await new Promise(r => setTimeout(r, 500));
         }
     }
 
