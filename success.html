@@ -52,19 +52,8 @@
             <button id="verify-btn" class="cta-button" style="display:none;">2. VERIFY PURCHASE</button>
         </div>
 
-        <div id="download-section" style="display:none;">
-            <div class="card success-card">
-                <h2>Verified Buyer ✨</h2>
-                <p>Your transaction has been confirmed on the Solana blockchain and recorded in our secure vault.</p>
-                <a href="https://github.com/gguelber/twitter-skill-bundle/archive/refs/heads/main.zip" class="cta-button">DOWNLOAD SKILL BUNDLE (.ZIP)</a>
-            </div>
-
-            <div class="instructions card">
-                <h3>One-Minute Install:</h3>
-                <code>mkdir -p ~/.openclaw/workspace/skills/twitter-manager</code><br>
-                <code># Unzip package into that folder</code><br>
-                <code>npm install && node setup.js</code>
-            </div>
+        <div id="download-section" style="display:none;" class="animate-card">
+            <p>Verification in progress... Connecting to the local Gaia vault.</p>
         </div>
     </div>
 
@@ -94,22 +83,50 @@
 
         verifyBtn.onclick = async () => {
             try {
-                // Verify against Supabase
+                // 1. SECURE PROOF OF OWNERSHIP (SIGN MESSAGE)
+                const message = `Authorize Gaia Skill Access\nWallet: ${walletAddress}\nTimestamp: ${Date.now()}`;
+                const encodedMessage = new TextEncoder().encode(message);
+                const signedMessage = await window.solana.signMessage(encodedMessage, "utf8");
+                
+                console.log("Proof of ownership signed.");
+
+                // 2. VERIFY AGAINST SUPABASE
                 const { data, error } = await supabaseClient
                     .from('sales')
                     .select('*')
                     .eq('wallet_address', walletAddress)
                     .single();
 
-                if (data) {
+                if (data && !error) {
                     verifyBtn.style.display = 'none';
+                    
+                    // 3. DYNAMIC LINK INJECTION (Not in the original HTML source)
+                    const downloadBtn = document.createElement('a');
+                    downloadBtn.href = "https://github.com/gguelber/twitter-skill-bundle/archive/refs/heads/main.zip";
+                    downloadBtn.className = "cta-button animate-glow";
+                    downloadBtn.innerText = "DOWNLOAD SKILL BUNDLE (.ZIP)";
+                    
+                    const card = document.createElement('div');
+                    card.className = "card success-card";
+                    card.innerHTML = "<h2>Identity Verified ✨</h2><p>Welcome, Commander. Your premium bundle is ready.</p>";
+                    card.appendChild(downloadBtn);
+                    
+                    downloadSection.innerHTML = ''; // Clear wait message
+                    downloadSection.appendChild(card);
                     downloadSection.style.display = 'block';
+                    
+                    // Add secondary instructions below
+                    const meta = document.createElement('div');
+                    meta.className = "instructions card";
+                    meta.innerHTML = "<h3>One-Minute Install:</h3><code>mkdir -p ~/.openclaw/workspace/skills/twitter-manager</code><br><code># Unzip package into that folder</code><br><code>npm install && node setup.js</code>";
+                    downloadSection.appendChild(meta);
+
                 } else {
-                    alert("No purchase found for this wallet. If you just paid, wait 10 seconds and try again.");
+                    alert("Verification Failed: No purchase found for this wallet in our database.");
                 }
             } catch (err) {
                 console.error(err);
-                alert("Verification failed. Make sure your local Supabase tunnel is live!");
+                alert("Auth Failed: " + (err.message || "Unknown error"));
             }
         };
     </script>
